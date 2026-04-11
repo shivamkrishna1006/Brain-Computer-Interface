@@ -1,0 +1,301 @@
+# BCI EEG Model Configuration
+# This file contains all configurable parameters for training and inference
+
+# ==============================================================================
+# PATHS - File system locations
+# ==============================================================================
+paths:
+  # Model storage
+  models_dir: "models"
+  best_model_path: "models/best_eeg_model.h5"
+  checkpoint_dir: "models/checkpoints"
+  
+  # Data directories
+  data_dir: "data"
+  raw_data_dir: "data/raw"
+  processed_data_dir: "data/processed"
+  
+  # Output and logs
+  output_dir: "outputs"
+  logs_dir: "outputs/logs"
+  history_path: "outputs/training_history.json"
+  metadata_path: "outputs/training_metadata.json"
+  
+  # Config file location (for reference)
+  config_path: "config.yaml"
+
+# ==============================================================================
+# MODEL ARCHITECTURE - CNN-LSTM network design
+# ==============================================================================
+model:
+  type: "CNN_LSTM"
+  name: "EEG_Motor_Imagery_Classifier"
+  
+  # CNN parameters
+  cnn:
+    filters: [32, 64, 128]  # Number of filters per conv layer
+    kernel_size: 3           # Kernel size for convolution
+    pool_size: 2            # Max pooling size
+    activation: "relu"      # Activation function
+  
+  # LSTM parameters
+  lstm:
+    units: 128              # LSTM hidden units
+    dropout: 0.5            # Dropout rate in LSTM
+    recurrent_dropout: 0.2  # Recurrent dropout
+    return_sequences: false # Return sequence or final output
+  
+  # Dense layers
+  dense:
+    units: [64, 32]         # Units in dense layers
+    dropout: 0.5            # Dropout in dense layers
+    activation: "relu"      # Hidden layer activation
+  
+  # Output layer
+  output:
+    activation: "softmax"   # Multi-class classification
+    loss: "categorical_crossentropy"  # Loss function
+
+# ==============================================================================
+# TRAINING CONFIGURATION - Hyperparameters and training settings
+# ==============================================================================
+training:
+  # Optimization
+  learning_rate: 0.001             # Initial learning rate
+  optimizer: "adam"                # Optimizer type
+  batch_size: 32                   # Batch size for training
+  epochs: 50                       # Maximum number of epochs
+  
+  # Early stopping
+  early_stopping:
+    enabled: true
+    monitor: "val_loss"            # Metric to monitor
+    patience: 15                   # Epochs to wait before stopping
+    restore_best_weights: true     # Restore best weights after stopping
+    min_delta: 0.0001             # Minimum change to qualify as improvement
+  
+  # Learning rate reduction
+  reduce_lr_on_plateau:
+    enabled: true
+    monitor: "val_loss"
+    factor: 0.5                    # Multiply learning rate by this factor
+    patience: 5                    # Epochs to wait before reducing
+    min_lr: 1e-7                   # Minimum learning rate
+    cooldown: 0
+  
+  # Model checkpointing
+  checkpoint:
+    enabled: true
+    monitor: "val_accuracy"        # Metric to monitor for best model
+    save_best_only: true
+    save_weights_only: false
+  
+  # Regularization
+  class_weights:
+    enabled: true                  # Auto-compute class weights for imbalance
+    strategy: "balanced"           # or "manual"
+  
+  # Callbacks
+  tensorboard:
+    enabled: true
+    histogram_freq: 1
+    write_graph: true
+    update_freq: "epoch"
+  
+  # Data splitting
+  validation_split: 0.2            # Fraction of data for validation
+  test_split: 0.1                  # Fraction of data for testing
+  shuffle_data: true
+  random_seed: 42
+
+# ==============================================================================
+# DATA CONFIGURATION - EEG signal parameters and preprocessing
+# ==============================================================================
+data:
+  # EEG signal parameters
+  eeg_channels: 8                  # Number of EEG electrodes/channels
+  sampling_rate: 250               # Sampling frequency (Hz)
+  signal_duration: 1.0             # Signal duration (seconds)
+  n_samples_per_signal: 250        # Samples per signal (calculated: sampling_rate * duration)
+  
+  # Configuration
+  n_classes: 5                     # Number of motor imagery classes
+  class_labels:                    # Class definitions
+    0: "Left"
+    1: "Right"
+    2: "Hands"
+    3: "Feet"
+    4: "Click"
+  
+  # Data preprocessing
+  preprocessing:
+    # Normalization
+    normalize: true
+    normalization_type: "z-score"  # or "min-max"
+    
+    # Filtering
+    bandpass_filter:
+      enabled: true
+      low_cutoff: 0.5              # Hz, high-pass filter
+      high_cutoff: 50.0            # Hz, low-pass filter
+      order: 4                      # Filter order
+    
+    # Feature extraction
+    extract_features: false        # Extract hand-crafted features
+    
+    # Artifact removal
+    artifact_removal:
+      enabled: false
+      method: "ICA"                # or "ASR" (Automatic Artifact Removal)
+  
+  # Data augmentation
+  augmentation:
+    enabled: true
+    noise_std: 0.01               # Standard deviation of added Gaussian noise
+    time_shift: 5                 # Max time shift in samples
+    scaling_factor: [0.9, 1.1]    # Min/max amplitude scaling
+    stretch_factor: [0.8, 1.2]    # Time stretching range
+  
+  # Dataset
+  n_subjects: 10                   # Number of subjects (for PhysioNet or custom data)
+  n_sessions_per_subject: 2        # Sessions per subject
+  n_trials_per_session: 48         # Trials per session
+  
+  # Frequency range of interest
+  frequency_range:
+    low_freq: 8                    # Hz (alpha band lower)
+    high_freq: 30                  # Hz (beta band upper)
+    bands:
+      alpha:
+        low: 8
+        high: 13
+      beta:
+        low: 13
+        high: 30
+      mu:
+        low: 8
+        high: 13
+
+# ==============================================================================
+# REAL-TIME INFERENCE CONFIGURATION - Live prediction settings
+# ==============================================================================
+realtime:
+  # Buffer management
+  buffer_size: 250                 # Samples in buffer (1 second @ 250Hz)
+  buffer_overlap: 0.5              # Fraction of buffer to overlap for predictions
+  
+  # Prediction
+  confidence_threshold: 0.7        # Minimum confidence to act
+  debounce_count: 3                # Consecutive predictions needed before action
+  action_cooldown_ms: 100          # Minimum time between actions (ms)
+  
+  # Mouse control
+  mouse:
+    move_distance: 50              # Pixels per movement
+    cursor_smoothing:
+      enabled: true
+      alpha: 0.3                   # Exponential smoothing factor (0=smooth, 1=responsive)
+      velocity_factor: 0.8         # Momentum factor for smooth movement
+    
+    # Screen limits
+    edge_margin_px: 20             # Keep cursor away from edges
+    
+    # Movement mapping
+    left_move_pixels: 50
+    right_move_pixels: 50
+    up_move_pixels: 50
+    down_move_pixels: 50
+    click_duration_ms: 100
+  
+  # Monitoring and statistics
+  track_statistics: true
+  print_predictions: false         # Print each prediction
+  print_interval_sec: 5.0         # Print statistics every N seconds
+  
+  # Pause and status
+  allow_pause: true
+  return_status: true
+
+# ==============================================================================
+# DATA GENERATION (for testing/demo purposes)
+# ==============================================================================
+data_generation:
+  # Synthetic EEG generation
+  generate_synthetic: false        # Generate synthetic data for testing
+  synthetic_data_size: 1000        # Number of synthetic samples
+  
+  # Signal characteristics
+  base_frequency: 10.0             # Hz (alpha band)
+  noise_level: 0.1                 # Relative noise level
+  drift_frequency: 0.1             # Hz (low-frequency drift)
+  
+  # Class-specific patterns
+  class_patterns:
+    left_amplitude: 1.2            # Relative amplitude for left vs baseline
+    right_amplitude: 1.2
+    hands_amplitude: 1.3
+    feet_amplitude: 1.4
+    click_amplitude: 1.1
+
+# ==============================================================================
+# PHYSIONET CONFIGURATION (if using PhysioNet dataset)
+# ==============================================================================
+physionet:
+  enabled: false                   # Use PhysioNet dataset
+  dataset_name: "motor_imagery"    # Name of PhysioNet dataset
+  download_dir: "data/physionet"
+  
+  subjects:
+    min: 1                         # Minimum subject ID
+    max: 109                       # Maximum subject ID
+    selected: []                   # Empty = use all, or specify: [1, 2, 5]
+  
+  # Preprocessing for PhysioNet
+  resample_to: 250                 # Target sampling rate (Hz)
+
+# ==============================================================================
+# LOGGING AND DEBUGGING
+# ==============================================================================
+logging:
+  level: "INFO"                    # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "outputs/logs/training.log"
+  
+  verbose:
+    print_epoch_details: true
+    print_batch_details: false
+    print_eta: true
+    show_progress_bar: true
+
+# ==============================================================================
+# VALIDATION AND TESTING
+# ==============================================================================
+validation:
+  # Validation during training
+  validate_every_n_epochs: 1       # Run validation every N epochs
+  
+  # Test set evaluation
+  evaluate_on_test_set: true
+  
+  # Cross-validation
+  cross_validation:
+    enabled: false
+    folds: 5                       # k-fold cross-validation
+
+# ==============================================================================
+# OUTPUT AND EXPORT
+# ==============================================================================
+output:
+  # Model export
+  export_model: true
+  export_format: "h5"              # or "savedmodel"
+  export_path: "models/best_eeg_model.h5"
+  
+  # History and metadata
+  save_training_history: true
+  save_in_json: true
+  
+  # Plots and visualizations
+  generate_plots: false            # Not yet implemented
+  plot_training_curves: false
+  plot_confusion_matrix: false

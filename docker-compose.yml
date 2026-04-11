@@ -1,0 +1,127 @@
+version: '3.9'
+
+services:
+  # Main BCI Interface service
+  bci:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bci-interface:latest
+    container_name: bci-interface
+    
+    # Environment configuration
+    env_file: .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TF_CPP_MIN_LOG_LEVEL=2
+    
+    # Volume mounts for persistence
+    volumes:
+      # Model storage
+      - ./models:/app/models
+      # Data directories
+      - ./data:/app/data
+      # Configuration
+      - ./config.yaml:/app/config.yaml:ro
+      # Outputs and logs
+      - ./outputs:/app/outputs
+      - ./logs:/app/logs
+    
+    # Port mappings (if needed for monitoring)
+    ports:
+      - "6006:6006"  # TensorBoard
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import tensorflow; import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Override entrypoint for different commands
+    # Example: docker-compose run bci train
+    # Example: docker-compose run bci evaluate --model bci_model
+    # Example: docker-compose run bci realtime --model bci_model
+
+  # Optional: JupyterLab for interactive development
+  jupyter:
+    image: jupyter/tensorflow-notebook:latest
+    container_name: bci-jupyter
+    
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+    
+    volumes:
+      - ./notebooks:/home/jovyan/work
+      - ./data:/home/jovyan/work/data
+      - ./models:/home/jovyan/work/models
+    
+    ports:
+      - "8888:8888"
+    
+    command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''
+    
+    restart: unless-stopped
+    
+    depends_on:
+      - bci
+    
+    profiles:
+      - dev  # Optional service, use with: docker-compose --profile dev up
+
+  # Optional: PostgreSQL for experiment tracking
+  postgres:
+    image: postgres:14-alpine
+    container_name: bci-postgres
+    
+    environment:
+      POSTGRES_USER: bci_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me}
+      POSTGRES_DB: bci_experiments
+    
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    
+    ports:
+      - "5432:5432"
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bci_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    
+    restart: unless-stopped
+    
+    profiles:
+      - monitoring  # Optional service
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  default:
+    name: bci-network
+    driver: bridge

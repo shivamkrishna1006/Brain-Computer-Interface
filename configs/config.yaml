@@ -1,0 +1,112 @@
+# BCI Interface Configuration
+
+# Data Configuration
+data:
+  sampling_rate: 250          # Hz
+  eeg_channels: 8             # Number of EEG channels
+  num_classes: 2              # Binary classification (Click/NoClick)
+  segment_duration: 1.0       # seconds
+  segment_samples: 250        # samples per segment (duration * sampling_rate)
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+  
+# Preprocessing Configuration
+preprocessing:
+  # Filtering
+  lowpass_freq: 50            # Hz
+  highpass_freq: 0.5          # Hz
+  notch_freq: 50              # Hz (power line noise)
+  
+  # Normalization
+  normalize_method: 'zscore'  # 'zscore', 'minmax', or 'robust'
+  
+  # Artifact removal
+  remove_artifacts: true
+  muscle_threshold: 100       # μV threshold for muscle artifacts
+  
+# Model Configuration
+model:
+  name: 'CNN_LSTM'
+  input_shape: [250, 8]       # [time_steps, channels]
+  
+  # CNN parameters
+  cnn_filters: [32, 64, 128]
+  cnn_kernel_size: 5
+  cnn_pool_size: 2
+  cnn_dropout: 0.3
+  
+  # LSTM parameters
+  lstm_units: 128
+  lstm_dropout: 0.4
+  lstm_recurrent_dropout: 0.2
+  
+  # Dense layers
+  dense_units: 64
+  dense_dropout: 0.3
+  
+  # Regularization
+  l2_regularization: 0.001
+  
+# Training Configuration
+training:
+  batch_size: 32
+  epochs: 100
+  learning_rate: 0.001
+  optimizer: 'adam'           # 'adam', 'sgd', 'rmsprop'
+  loss_function: 'binary_crossentropy'
+  metrics: ['accuracy', 'auc', 'precision', 'recall']
+  
+  # Early stopping
+  early_stopping_patience: 15
+  early_stopping_restore_best: true
+  early_stopping_monitor: 'val_loss'
+  
+  # Learning rate scheduling
+  use_lr_scheduler: true
+  lr_scheduler_type: 'exponential'
+  lr_decay_rate: 0.95
+  lr_decay_steps: 5
+  
+  # Class weights (for imbalanced data)
+  use_class_weights: true
+  
+# Evaluation Configuration
+evaluation:
+  threshold: 0.5              # Classification threshold
+  metrics_to_compute:
+    - accuracy
+    - precision
+    - recall
+    - f1
+    - roc_auc
+    - confusion_matrix
+    
+# Real-time Configuration
+realtime:
+  buffer_size: 250            # Number of samples to process at once
+  overlap: 0                  # 0 = no overlap, 0.5 = 50% overlap
+  update_interval: 0.1        # seconds
+  confidence_threshold: 0.7   # Min confidence for click detection
+  
+# Click Detection Configuration
+click_detection:
+  min_duration: 0.1           # seconds (minimum click duration)
+  max_duration: 2.0           # seconds (maximum click duration)
+  hold_duration: 0.05         # seconds (hold time after click)
+  debounce_time: 0.2          # seconds (minimum time between clicks)
+  
+# Logging Configuration
+logging:
+  level: 'INFO'               # 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  log_file: 'outputs/bci.log'
+  
+# Output Configuration
+output:
+  save_model: true
+  model_path: 'models/bci_model.h5'
+  save_history: true
+  history_path: 'outputs/training_history.json'
+  save_predictions: true
+  predictions_path: 'outputs/predictions.csv'
