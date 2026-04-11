@@ -13,7 +13,7 @@ We provide security updates for the following versions:
 
 **Please do NOT report security vulnerabilities through public GitHub issues.**
 
-If you discover a security vulnerability in BCI_INTERFACE, please email [security@example.com] with:
+If you discover a security vulnerability in BCI_INTERFACE, please email security@shivamkrishna1006.dev with:
 
 1. **Description** - What is the vulnerability?
 2. **Impact** - How severe is it? What could an attacker do?
@@ -84,7 +84,7 @@ pip-audit
 
 ## Security Contact
 
-- **Email**: [security@example.com]
+- **Email**: security@shivamkrishna1006.dev
 - **PGP Key**: Available upon request
 
 ## Acknowledgments
