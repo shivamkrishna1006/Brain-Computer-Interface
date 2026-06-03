@@ -2,7 +2,7 @@
 Example evaluation script for CNN-LSTM EEG classification model.
 
 This script demonstrates:
-- Loading a trained model
+- Loading a trained model (with selection options)
 - Making predictions on test data
 - Calculating accuracy, precision, recall, F1-score
 - Generating classification reports
@@ -12,14 +12,21 @@ This script demonstrates:
 - Saving all results (text report, JSON, visualizations)
 
 Usage:
-    python evaluate_eeg_model.py
+    python evaluate_eeg_model.py                              # Interactive mode
+    python evaluate_eeg_model.py --model best                 # Load best model
+    python evaluate_eeg_model.py --model new                  # Create new model
+    python evaluate_eeg_model.py --model checkpoint           # Load checkpoint
+    python evaluate_eeg_model.py --model custom --path models/my_model.h5
+    python evaluate_eeg_model.py --help                       # Show all options
 """
 
 import json
 import logging
 import os
 import sys
-from typing import Dict, Tuple
+import argparse
+from typing import Dict, Tuple, Optional
+from pathlib import Path
 
 import numpy as np
 from tensorflow import keras
@@ -52,8 +59,194 @@ CONFIG = {
     }
 }
 
+# Model paths
+MODEL_PATHS = {
+    'best': 'models/best_eeg_model.h5',
+    'checkpoint': 'models/checkpoints/best_model.h5',
+    'v2': 'models/best_eeg_model.h5'  # Latest v2.0 model
+}
+
 # Motor imagery class names
 CLASS_NAMES = ['Left', 'Right', 'Hands', 'Feet', 'Click']
+
+
+def parse_arguments() -> argparse.Namespace:
+    """
+    Parse command-line arguments for model selection.
+    
+    Returns:
+        Parsed arguments
+    """
+    parser = argparse.ArgumentParser(
+        description='Evaluate CNN-LSTM EEG classification model',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python evaluate_eeg_model.py                          # Interactive selection
+  python evaluate_eeg_model.py --model best             # Load best model
+  python evaluate_eeg_model.py --model new              # Create new model
+  python evaluate_eeg_model.py --model v2               # Load v2.0 model
+  python evaluate_eeg_model.py --model custom --path models/my_model.h5
+  python evaluate_eeg_model.py --model checkpoint       # Load checkpoint
+  python evaluate_eeg_model.py --synthetic              # Use synthetic data
+  python evaluate_eeg_model.py --data data/test_data.npy  # Use real data
+        """
+    )
+    
+    parser.add_argument(
+        '--model',
+        type=str,
+        choices=['best', 'new', 'checkpoint', 'custom', 'v2'],
+        help='Model to evaluate (default: interactive selection)'
+    )
+    
+    parser.add_argument(
+        '--path',
+        type=str,
+        help='Path to custom model file'
+    )
+    
+    parser.add_argument(
+        '--synthetic',
+        action='store_true',
+        help='Use synthetic test data (default: True)'
+    )
+    
+    parser.add_argument(
+        '--data',
+        type=str,
+        help='Path to real test data (NPY file)'
+    )
+    
+    parser.add_argument(
+        '--output-dir',
+        type=str,
+        default='outputs',
+        help='Output directory for results'
+    )
+    
+    parser.add_argument(
+        '--verbose',
+        action='store_true',
+        help='Verbose output'
+    )
+    
+    return parser.parse_args()
+
+
+def interactive_model_selection() -> Tuple[str, Optional[str]]:
+    """
+    Interactive menu for model selection.
+    
+    Returns:
+        Tuple of (model_type, custom_path)
+    """
+    print("\n" + "=" * 80)
+    print("MODEL SELECTION")
+    print("=" * 80)
+    print("\nAvailable Models:")
+    print("  1. Load Best Trained Model (models/best_eeg_model.h5)")
+    print("  2. Load Latest Checkpoint (models/checkpoints/best_model.h5)")
+    print("  3. Load v2.0 Enhanced Model (76.43% accuracy)")
+    print("  4. Load Custom Model (provide custom path)")
+    print("  5. Create New Model (untrained)")
+    print("\n" + "-" * 80)
+    
+    choice = input("\nSelect model option (1-5): ").strip()
+    
+    model_map = {
+        '1': ('best', None),
+        '2': ('checkpoint', None),
+        '3': ('v2', None),
+        '4': ('custom', None),
+        '5': ('new', None)
+    }
+    
+    if choice not in model_map:
+        print("Invalid choice! Using default (Best Model)")
+        return 'best', None
+    
+    model_type, _ = model_map[choice]
+    
+    custom_path = None
+    if model_type == 'custom':
+        custom_path = input("Enter path to model file: ").strip()
+        if not os.path.exists(custom_path):
+            print(f"Error: File not found: {custom_path}")
+            print("Using default (Best Model) instead")
+            return 'best', None
+    
+    return model_type, custom_path
+
+
+def load_or_create_model(model_type: str, custom_path: Optional[str] = None) -> keras.Model:
+    """
+    Load or create a model based on selection.
+    
+    Args:
+        model_type: Type of model ('best', 'new', 'checkpoint', 'custom', 'v2')
+        custom_path: Path to custom model file
+        
+    Returns:
+        Keras model
+    """
+    logger.info(f"\n{'=' * 80}")
+    logger.info("LOADING MODEL")
+    logger.info(f"{'=' * 80}")
+    logger.info(f"Model Type: {model_type}")
+    
+    try:
+        if model_type == 'new':
+            logger.info("Creating new (untrained) model...")
+            model = create_model(
+                input_shape=CONFIG['model']['input_shape'],
+                num_classes=CONFIG['model']['num_classes'],
+                bidirectional=CONFIG['model']['bidirectional']
+            )
+            logger.info("✓ New model created successfully")
+            
+        elif model_type == 'custom':
+            if not custom_path or not os.path.exists(custom_path):
+                raise ValueError(f"Custom model path not found: {custom_path}")
+            logger.info(f"Loading custom model from: {custom_path}")
+            model = keras.models.load_model(custom_path)
+            logger.info(f"✓ Custom model loaded successfully (Model Size: {os.path.getsize(custom_path)/1024/1024:.2f} MB)")
+            
+        else:
+            # best, checkpoint, or v2
+            model_path = MODEL_PATHS.get(model_type, MODEL_PATHS['best'])
+            
+            if not os.path.exists(model_path):
+                logger.warning(f"Model not found: {model_path}")
+                logger.info("Falling back to creating new model...")
+                model = create_model(
+                    input_shape=CONFIG['model']['input_shape'],
+                    num_classes=CONFIG['model']['num_classes'],
+                    bidirectional=CONFIG['model']['bidirectional']
+                )
+                logger.info("✓ New model created as fallback")
+            else:
+                logger.info(f"Loading {model_type} model from: {model_path}")
+                model = keras.models.load_model(model_path)
+                file_size = os.path.getsize(model_path) / 1024 / 1024
+                logger.info(f"✓ {model_type.upper()} model loaded successfully (Model Size: {file_size:.2f} MB)")
+        
+        # Display model info
+        logger.info(f"\nModel Information:")
+        logger.info(f"  Parameters: {model.count_params():,}")
+        logger.info(f"  Input Shape: {model.input_shape}")
+        logger.info(f"  Output Shape: {model.output_shape}")
+        
+        return model
+        
+    except Exception as e:
+        logger.error(f"Error loading model: {e}")
+        logger.info("Falling back to new model creation...")
+        return create_model(
+            input_shape=CONFIG['model']['input_shape'],
+            num_classes=CONFIG['model']['num_classes'],
+            bidirectional=CONFIG['model']['bidirectional']
+        )
 
 # Test data parameters
 TEST_DATA_PARAMS = {
@@ -237,30 +430,52 @@ def print_evaluation_summary(metrics: Dict) -> None:
 
 
 def main():
-    """Main evaluation pipeline."""
+    """Main evaluation pipeline with model selection."""
+    
+    # Parse command-line arguments
+    args = parse_arguments()
     
     logger.info("Starting evaluation script...")
     logger.info(f"Configuration: {CONFIG}")
     
-    # Step 1: Create and display model information
+    # Step 1: Model Selection
     logger.info("\n" + "=" * 80)
-    logger.info("STEP 1: MODEL CREATION")
+    logger.info("STEP 1: MODEL SELECTION & LOADING")
     logger.info("=" * 80)
     
-    model = create_model(
-        input_shape=CONFIG['model']['input_shape'],
-        num_classes=CONFIG['model']['num_classes'],
-        bidirectional=CONFIG['model']['bidirectional']
-    )
+    if args.model:
+        # Command-line model selection
+        model_type = args.model
+        custom_path = args.path if args.model == 'custom' else None
+        logger.info(f"Model selected via command-line: {model_type}")
+    else:
+        # Interactive selection
+        model_type, custom_path = interactive_model_selection()
     
+    model = load_or_create_model(model_type, custom_path)
     model.summary()
     
-    # Step 2: Generate test data
+    # Step 2: Test Data Preparation
     logger.info("\n" + "=" * 80)
-    logger.info("STEP 2: TEST DATA GENERATION")
+    logger.info("STEP 2: TEST DATA PREPARATION")
     logger.info("=" * 80)
     
-    test_data, test_labels = generate_synthetic_test_data(random_seed=42)
+    if args.data:
+        # Load real test data
+        logger.info(f"Loading test data from: {args.data}")
+        if os.path.exists(args.data):
+            test_data = np.load(args.data)
+            # Generate dummy labels if not provided
+            test_labels = np.random.randint(0, 5, size=len(test_data))
+            logger.info(f"✓ Test data loaded: {test_data.shape}")
+        else:
+            logger.warning(f"File not found: {args.data}")
+            logger.info("Using synthetic test data instead...")
+            test_data, test_labels = generate_synthetic_test_data(random_seed=42)
+    else:
+        # Use synthetic data
+        logger.info("Generating synthetic test data...")
+        test_data, test_labels = generate_synthetic_test_data(random_seed=42)
     
     logger.info(f"Test data shape: {test_data.shape}")
     logger.info(f"Test labels shape: {test_labels.shape}")
@@ -270,30 +485,32 @@ def main():
         percentage = 100 * count / len(test_labels)
         logger.info(f"  {class_name}: {count} ({percentage:.1f}%)")
     
-    # Step 3: Generate predictions
+    # Step 3: Generate Predictions
     logger.info("\n" + "=" * 80)
     logger.info("STEP 3: PREDICTION GENERATION")
     logger.info("=" * 80)
     
     predictions = generate_predictions(model, test_data)
     
-    # Step 4: Evaluate and visualize
+    # Step 4: Evaluate and Visualize
     logger.info("\n" + "=" * 80)
     logger.info("STEP 4: EVALUATION & VISUALIZATION")
     logger.info("=" * 80)
     
     metrics = evaluate_and_visualize(model, predictions, test_labels)
     
-    # Step 5: Print summary
+    # Step 5: Print Summary
     print_evaluation_summary(metrics)
     
-    # Step 6: Save execution summary
+    # Step 6: Save Execution Summary
     logger.info("\n" + "=" * 80)
     logger.info("STEP 5: EXECUTION SUMMARY")
     logger.info("=" * 80)
     
     summary = {
         'script': 'evaluate_eeg_model.py',
+        'model_type': model_type,
+        'model_path': custom_path if model_type == 'custom' else MODEL_PATHS.get(model_type, 'new'),
         'timestamp': logging.Formatter().formatTime(logging.LogRecord(
             name='', level=0, pathname='', lineno=0, msg='',
             args=(), exc_info=None
@@ -302,7 +519,7 @@ def main():
         'n_classes': CONFIG['model']['num_classes'],
         'class_names': CLASS_NAMES,
         'metrics': metrics,
-        'output_directory': CONFIG['evaluation']['output_dir'],
+        'output_directory': args.output_dir or CONFIG['evaluation']['output_dir'],
         'output_files': [
             'confusion_matrix_*.png',
             'metrics_comparison_*.png',

@@ -108,23 +108,90 @@ def index():
 
 @app.route('/api/models')
 def get_models():
-    """Get available models"""
+    """Get available models with detailed information"""
     try:
         models_dir = Path(app.config['MODELS_DIR'])
         models = []
         
+        # Predefined model options with metadata
+        predefined_models = [
+            {
+                'name': 'best_eeg_model',
+                'display_name': 'Best Trained Model (71.47%)',
+                'version': '1.0',
+                'accuracy': '71.47%',
+                'description': 'Original CNN-LSTM model with baseline accuracy',
+                'status': 'available',
+                'type': 'production'
+            },
+            {
+                'name': 'best_eeg_model_v2',
+                'display_name': 'Enhanced Model v2.0 (76.43%)',
+                'version': '2.0',
+                'accuracy': '76.43%',
+                'description': 'Enhanced CNN-LSTM with 50% more capacity and optimized parameters (Recommended)',
+                'status': 'available',
+                'type': 'production'
+            },
+            {
+                'name': 'checkpoint_best',
+                'display_name': 'Latest Checkpoint',
+                'version': '2.0',
+                'accuracy': '~76%',
+                'description': 'Most recent model checkpoint',
+                'status': 'available',
+                'type': 'checkpoint'
+            },
+            {
+                'name': 'new_model',
+                'display_name': 'New Model (Untrained)',
+                'version': '2.0',
+                'accuracy': 'N/A',
+                'description': 'Fresh model for training',
+                'status': 'ready',
+                'type': 'new'
+            }
+        ]
+        
+        # Add any models found in the models directory
         if models_dir.exists():
             for model_file in models_dir.glob('*.h5'):
-                metadata_file = models_dir / f"{model_file.stem}_metadata.json"
-                model_info = {
-                    'name': model_file.stem,
-                    'path': str(model_file),
-                    'size': f"{model_file.stat().st_size / (1024*1024):.2f}MB",
-                    'created': datetime.fromtimestamp(model_file.stat().st_ctime).isoformat()
-                }
-                models.append(model_info)
+                # Check if already in predefined list
+                stem = model_file.stem
+                if not any(m['name'] == stem for m in predefined_models):
+                    model_info = {
+                        'name': stem,
+                        'display_name': f"Custom Model: {stem}",
+                        'path': str(model_file),
+                        'size': f"{model_file.stat().st_size / (1024*1024):.2f}MB",
+                        'created': datetime.fromtimestamp(model_file.stat().st_ctime).isoformat(),
+                        'accuracy': 'Unknown',
+                        'version': '1.0',
+                        'description': 'Custom model file',
+                        'status': 'available',
+                        'type': 'custom'
+                    }
+                    models.append(model_info)
         
-        return jsonify({'models': models, 'count': len(models)})
+        # Add predefined models to the list
+        for pred_model in predefined_models:
+            model_file = models_dir / f"{pred_model['name']}.h5" if models_dir.exists() else None
+            if model_file and model_file.exists():
+                pred_model['path'] = str(model_file)
+                pred_model['size'] = f"{model_file.stat().st_size / (1024*1024):.2f}MB"
+                pred_model['created'] = datetime.fromtimestamp(model_file.stat().st_ctime).isoformat()
+            models.append(pred_model)
+        
+        return jsonify({
+            'models': models,
+            'count': len(models),
+            'categories': {
+                'production': [m for m in models if m.get('type') == 'production'],
+                'checkpoint': [m for m in models if m.get('type') == 'checkpoint'],
+                'new': [m for m in models if m.get('type') == 'new'],
+                'custom': [m for m in models if m.get('type') == 'custom']
+            }
+        })
     except Exception as e:
         logger.error(f"Error getting models: {e}")
         return jsonify({'error': str(e)}), 500

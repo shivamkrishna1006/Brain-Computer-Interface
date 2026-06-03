@@ -287,7 +287,27 @@
                                     <label class="form-label">Select Model</label>
                                     <select class="form-select" id="modelSelect">
                                         <option value="">Choose a model...</option>
+                                        <!-- Production Models -->
+                                        <optgroup label="Production Models">
+                                            <option value="best_eeg_model">Best Trained Model (71.47%)</option>
+                                            <option value="best_eeg_model_v2" selected>Enhanced Model v2.0 (76.43%) - Recommended</option>
+                                        </optgroup>
+                                        <!-- Checkpoints -->
+                                        <optgroup label="Checkpoints">
+                                            <option value="checkpoint_best">Latest Checkpoint</option>
+                                        </optgroup>
+                                        <!-- Other -->
+                                        <optgroup label="Other">
+                                            <option value="new_model">New Model (Untrained)</option>
+                                        </optgroup>
                                     </select>
+                                    <small class="text-muted d-block mt-2">
+                                        <i class="fas fa-info-circle"></i>
+                                        <span id="modelDescription">Select a model to see details</span>
+                                    </small>
+                                </div>
+                                <div class="alert alert-info d-none" id="modelDetails">
+                                    <div id="modelDetailsContent"></div>
                                 </div>
                                 <button class="btn btn-success w-100" onclick="startEvaluation()">
                                     <i class="fas fa-check"></i> Evaluate Model

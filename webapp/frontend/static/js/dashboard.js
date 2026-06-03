@@ -600,34 +600,90 @@ function loadModels() {
             const modelSelect = document.getElementById('modelSelect');
             
             modelsList.innerHTML = '';
-            modelSelect.innerHTML = '<option value="">Choose a model...</option>';
             
             if (data.models.length === 0) {
                 modelsList.innerHTML = '<p class="text-muted col-12">No models available. Train a model first.</p>';
             } else {
+                // Organize models by type
+                const modelsByType = {};
                 data.models.forEach(model => {
-                    // Add to list
+                    const type = model.type || 'custom';
+                    if (!modelsByType[type]) {
+                        modelsByType[type] = [];
+                    }
+                    modelsByType[type].push(model);
+                    
+                    // Add to models list
                     const modelCard = document.createElement('div');
                     modelCard.className = 'col-md-4 model-card';
+                    const badge = model.type === 'production' ? '<span class="badge bg-success">Production</span>' : '';
                     modelCard.innerHTML = `
-                        <div class="model-card-title">${model.name}</div>
-                        <div class="model-card-info">Size: ${model.size}</div>
-                        <div class="model-card-info">Created: ${new Date(model.created).toLocaleString()}</div>
+                        <div class="model-card-title">${model.display_name || model.name} ${badge}</div>
+                        <div class="model-card-info">
+                            <strong>Version:</strong> ${model.version || 'N/A'}<br>
+                            <strong>Accuracy:</strong> ${model.accuracy || 'Unknown'}
+                        </div>
+                        <div class="model-card-info">${model.description || ''}</div>
+                        ${model.created ? `<div class="model-card-info small text-muted">Created: ${new Date(model.created).toLocaleString()}</div>` : ''}
                     `;
                     modelsList.appendChild(modelCard);
-                    
-                    // Add to select
-                    const option = document.createElement('option');
-                    option.value = model.name;
-                    option.textContent = model.name;
-                    modelSelect.appendChild(option);
                 });
+            }
+            
+            // Store models data for later use
+            window.modelsData = data;
+            
+            // Set up model selection handler
+            modelSelect.addEventListener('change', function() {
+                updateModelDescription(this.value);
+            });
+            
+            // Load the description for the first available model
+            if (data.models.length > 0) {
+                updateModelDescription(data.models[0].name);
             }
         })
         .catch(error => {
             console.error('Error loading models:', error);
             showToast('Failed to load models', 'danger');
         });
+}
+
+function updateModelDescription(modelName) {
+    if (!modelName || !window.modelsData) {
+        document.getElementById('modelDescription').textContent = 'Select a model to see details';
+        document.getElementById('modelDetails').classList.add('d-none');
+        return;
+    }
+    
+    const model = window.modelsData.models.find(m => m.name === modelName);
+    if (model) {
+        // Update description
+        const desc = `${model.version ? 'v' + model.version + ' | ' : ''}${model.accuracy}`;
+        document.getElementById('modelDescription').textContent = desc;
+        
+        // Update details card
+        const detailsDiv = document.getElementById('modelDetails');
+        const contentDiv = document.getElementById('modelDetailsContent');
+        
+        let detailsHTML = `
+            <strong>${model.display_name || model.name}</strong><br>
+            <small>${model.description || ''}</small><br>
+        `;
+        
+        if (model.status) {
+            detailsHTML += `<span class="badge ${model.status === 'available' ? 'bg-success' : 'bg-warning'}">${model.status}</span> `;
+        }
+        if (model.type) {
+            const typeBadgeColor = model.type === 'production' ? 'primary' : 
+                                 model.type === 'checkpoint' ? 'info' : 
+                                 model.type === 'new' ? 'warning' : 'secondary';
+            detailsHTML += `<span class="badge bg-${typeBadgeColor}">${model.type}</span>`;
+        }
+        
+        contentDiv.innerHTML = detailsHTML;
+        detailsDiv.classList.remove('d-none');
+    }
 }
 
 // ============================================================================

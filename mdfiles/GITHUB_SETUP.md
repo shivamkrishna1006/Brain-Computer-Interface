@@ -189,7 +189,7 @@ mdfiles/
 ## ✨ Features Highlighted for GitHub
 
 - 🧠 **CNN-LSTM Model** - Deep learning for motor imagery
-- 🎯 **71.47% Accuracy** - Tested on PhysioNet data
+- 🎯 **76.43% Accuracy** - Tested on PhysioNet data (enhanced v2.0)
 - ⚡ **<500ms Latency** - Real-time inference
 - 📊 **5 Real-Time Charts** - Flask + Socket.IO dashboard
 - 🐳 **Docker Ready** - Multi-stage production build

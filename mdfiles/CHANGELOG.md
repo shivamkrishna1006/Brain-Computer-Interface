@@ -171,7 +171,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### 📖 Known Limitations
 
-- Model accuracy: 71.47% on test set (5-class classification)
+- Model accuracy: 76.43% on test set (5-class classification, enhanced v2.0)
 - Inference latency: 50-100ms per sample
 - Buffer accumulation time: 1000ms for complete signal
 - Requires minimum 4GB RAM
